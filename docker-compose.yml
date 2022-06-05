@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  ytsa:
+    image: yutanakamizo/youtube-stats-aggregater
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      TZ: Asis/Tokyo
+
