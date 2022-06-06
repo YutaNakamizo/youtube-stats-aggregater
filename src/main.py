@@ -4,12 +4,19 @@ from apiclient.discovery import build
 import mysql.connector
 
 def main():
+  now = datetime.now()
+  now_str = now.strftime('%Y-%m-%d %H:%M:%S.%f')
+
   # Init YouTube Data API client
   GOOGLE_API_KEY = os.getenv("YTSA_GOOGLE_API_KEY")
   if GOOGLE_API_KEY == "":
-    raise ValueError("GOOGLE_API_KEY is not set.")
+    raise ValueError("YTSA_GOOGLE_API_KEY is not set.")
 
-  youtube = build('youtube', 'v3', developerKey=GOOGLE_API_KEY)
+  youtube = build(
+    'youtube',
+    'v3',
+    developerKey=GOOGLE_API_KEY
+  )
   print("Initialized YouTube Data API client.")
 
   # Get stats via YouTube Data API
@@ -17,16 +24,23 @@ def main():
   if TARGET_CHANNEL_ID == "":
     raise ValueError("YTSA_TARGET_CHANNEL_ID is not set.")
 
-  stats_resp = youtube.channels().list(
-    part="statistics",
-    id=TARGET_CHANNEL_ID
-  ).execute()
-  print("Executed list action on YouTube Channel for channelId.")
+  stats_all = []
 
-  if not stats_resp["items"]:
-    raise IndexError("YouTube Data API returned empty response.")
+  stats_req = youtube.channels().list(
+    part="id,statistics",
+    id=TARGET_CHANNEL_ID,
+    maxResults=50
+  )
+  stats_res = stats_req.execute()
+  stats_all.extend(stats_res["items"])
 
-  stats = stats_resp["items"][0]["statistics"]
+  while True:
+    stats_res = youtube.channels().list_next(stats_req, stats_res)
+    if stats_res == None:
+      break
+    stats_all.extend(stats_res["items"])
+
+  print("Executed list action on YouTube Channel.")
 
   # Init MySQL database and table
   MYSQL_TABLE_PREFIX = os.getenv("YTSA_MYSQL_TABLE_PREFIX")
@@ -57,8 +71,24 @@ def main():
   print("Created table on MySQL server (if not exists)")
 
   # Insert stats into MySQL
-  now = datetime.now()
-  cur.execute(
+  def convert_ytitem_to_sqlrecord(item):
+    id = item["id"]
+    stats = item["statistics"]
+    return {
+      "datetime": now_str,
+      "channelId": id,
+      "subscriberCount": int(stats["subscriberCount"]) if "subscriberCount" in stats else None,
+      "viewCount": int(stats["viewCount"]) if "viewCount" in stats else None,
+      "videoCount": int(stats["videoCount"]) if "videoCount" in stats else None,
+      "commentCount": int(stats["commentCount"]) if "commentCount" in stats else None
+    }
+
+  records = list(map(
+    convert_ytitem_to_sqlrecord,
+    stats_all
+  ))
+
+  cur.executemany(
     "INSERT INTO" \
     "`" + tablename + "`" \
     "(" \
@@ -78,16 +108,9 @@ def main():
     "  %(videoCount)s," \
     "  %(commentCount)s" \
     ");",
-    {
-      "datetime": now.strftime('%Y-%m-%d %H:%M:%S.%f'),
-      "channelId": TARGET_CHANNEL_ID,
-      "subscriberCount": int(stats["subscriberCount"]) if "subscriberCount" in stats else None,
-      "viewCount": int(stats["viewCount"]) if "viewCount" in stats else None,
-      "videoCount": int(stats["videoCount"]) if "videoCount" in stats else None,
-      "commentCount": int(stats["commentCount"]) if "commentCount" in stats else None
-    }
+    records
   )
-  print("Inserted statistics record into MySQL server.")
+  print("Inserted statistics record(s) into MySQL server.")
 
   cur.close()
   conn.commit()
