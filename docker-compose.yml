@@ -7,5 +7,5 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      TZ: Asis/Tokyo
+      TZ: Asia/Tokyo
 
