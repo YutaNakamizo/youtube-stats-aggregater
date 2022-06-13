@@ -1,12 +1,10 @@
 import os
-from datetime import datetime
 from apiclient.discovery import build
 import mysql.connector
 
-def main():
-  now = datetime.now()
-  now_str = now.strftime('%Y-%m-%d %H:%M:%S.%f')
+import get_stats
 
+def main():
   # Init YouTube Data API client
   GOOGLE_API_KEY = os.getenv("YTSA_GOOGLE_API_KEY")
   if GOOGLE_API_KEY == "":
@@ -19,30 +17,7 @@ def main():
   )
   print("Initialized YouTube Data API client.")
 
-  # Get stats via YouTube Data API
-  TARGET_CHANNEL_ID = os.getenv("YTSA_TARGET_CHANNEL_ID")
-  if TARGET_CHANNEL_ID == "":
-    raise ValueError("YTSA_TARGET_CHANNEL_ID is not set.")
-
-  stats_all = []
-
-  stats_req = youtube.channels().list(
-    part="id,statistics",
-    id=TARGET_CHANNEL_ID,
-    maxResults=50
-  )
-  stats_res = stats_req.execute()
-  stats_all.extend(stats_res["items"])
-
-  while True:
-    stats_res = youtube.channels().list_next(stats_req, stats_res)
-    if stats_res == None:
-      break
-    stats_all.extend(stats_res["items"])
-
-  print("Executed list action on YouTube Channel.")
-
-  # Init MySQL database and table
+  # Init MySQL connection
   MYSQL_TABLE_PREFIX = os.getenv("YTSA_MYSQL_TABLE_PREFIX")
   tablename = MYSQL_TABLE_PREFIX + "statistics"
 
@@ -55,66 +30,42 @@ def main():
   )
   print("Connected to MySQL server.")
 
-  cur = conn.cursor()
+  # Get parameters from env
+  ## Channels parameters
+  CHANNELS_FOR_USERNAME = os.getenv("YTSA_CHANNELS_FOR_USERNAME")
+  CHANNELS_ID = os.getenv("YTSA_CHANNELS_ID")
+  CHANNELS_ID = os.getenv("YTSA_TARGET_CHANNEL_ID") if not CHANNELS_ID else CHANNELS_ID
+  CHANNELS_HL = os.getenv("YTSA_CHANNELS_HL")
+  ## Videos parameters
+  VIDEOS_CHART = os.getenv("YTSA_VIDEOS_CHART")
+  VIDEOS_ID = os.getenv("YTSA_VIDEOS_ID")
+  VIDEOS_HL = os.getenv("YTSA_VIDEOS_HL")
+  VIDEOS_REGION_CODE = os.getenv("YTSA_VIDEOS_REGION_CODE")
+  VIDEOS_VIDEO_CATEGORY_ID = os.getenv("YTSA_VIDEOS_VIDEO_CATEGORY_ID")
 
-  cur.execute(
-    "CREATE TABLE IF NOT EXISTS `" + tablename + "` (" \
-    "  id int not null primary key auto_increment," \
-    "  datetime datetime not null default current_timestamp," \
-    "  channelId tinytext not null," \
-    "  subscriberCount int unsigned default null," \
-    "  viewCount int unsigned default null," \
-    "  videoCount int unsigned default null," \
-    "  commentCount int unsigned default null" \
-    ");"
-  )
-  print("Created table on MySQL server (if not exists)")
+  # Get stats and record them to the database
+  if CHANNELS_FOR_USERNAME or CHANNELS_ID:
+    get_stats.get_channels_stats(
+      youtube=youtube,
+      conn=conn,
+      table_prefix=MYSQL_TABLE_PREFIX,
+      forUsername=CHANNELS_FOR_USERNAME,
+      id=CHANNELS_ID,
+      hl=CHANNELS_HL
+    )
 
-  # Insert stats into MySQL
-  def convert_ytitem_to_sqlrecord(item):
-    id = item["id"]
-    stats = item["statistics"]
-    return {
-      "datetime": now_str,
-      "channelId": id,
-      "subscriberCount": int(stats["subscriberCount"]) if "subscriberCount" in stats else None,
-      "viewCount": int(stats["viewCount"]) if "viewCount" in stats else None,
-      "videoCount": int(stats["videoCount"]) if "videoCount" in stats else None,
-      "commentCount": int(stats["commentCount"]) if "commentCount" in stats else None
-    }
+  if VIDEOS_CHART or VIDEOS_ID:
+    get_stats.get_videos_stats(
+      youtube=youtube,
+      conn=conn,
+      table_prefix=MYSQL_TABLE_PREFIX,
+      chart=VIDEOS_CHART,
+      id=VIDEOS_ID,
+      hl=VIDEOS_HL,
+      regionCode=VIDEOS_REGION_CODE,
+      videoCategoryId=VIDEOS_VIDEO_CATEGORY_ID
+    )
 
-  records = list(map(
-    convert_ytitem_to_sqlrecord,
-    stats_all
-  ))
-
-  cur.executemany(
-    "INSERT INTO" \
-    "`" + tablename + "`" \
-    "(" \
-    "  datetime," \
-    "  channelId," \
-    "  subscriberCount," \
-    "  viewCount," \
-    "  videoCount," \
-    "  commentCount" \
-    ")" \
-    "VALUES" \
-    "(" \
-    "  %(datetime)s," \
-    "  %(channelId)s," \
-    "  %(subscriberCount)s," \
-    "  %(viewCount)s," \
-    "  %(videoCount)s," \
-    "  %(commentCount)s" \
-    ");",
-    records
-  )
-  print("Inserted statistics record(s) into MySQL server.")
-
-  cur.close()
-  conn.commit()
-  print("All transactions are committed.")
 
   conn.close()
 
