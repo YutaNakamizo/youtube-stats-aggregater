@@ -15,13 +15,13 @@ See [Channels: list  |  YouTube Data API  |  Google Developers](https://deve
 - `YTSA_CHANNELS_HL`: hl parameter
 
 #### Videos
-See [Videos: list  |  YouTube Data API  |  Google Developers](https://developers.google.com/youtube/v3/docs/videos/list)
+See [Videos: list  |  YouTube Data API  |  Google Developers](https://developers.google.com/youtube/v3/docs/videos/list).
 
-- `YTSA_VIDEOS_CHART`
-- `YTSA_VIDEOS_ID`
-- `YTSA_VIDEOS_HL`
-- `YTSA_VIDEOS_REGION_CODE`
-- `YTSA_VIDEOS_VIDEO_CATEGORY_ID`
+- `YTSA_VIDEOS_CHART`: chart filter
+- `YTSA_VIDEOS_ID`: id filter
+- `YTSA_VIDEOS_HL`: hl parameter
+- `YTSA_VIDEOS_REGION_CODE`: regionCode: parameter
+- `YTSA_VIDEOS_VIDEO_CATEGORY_ID`: videoCategoryId parameter
 
 ### GCP Project Config
 Set `YTSA_GOOGLE_API_KEY`, anAPI key of Google Cloud Platform Project which is enabled YouTube Data API v3.
