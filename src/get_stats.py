@@ -160,7 +160,7 @@ def get_videos_stats(youtube, chart, id, hl, regionCode, videoCategoryId, conn, 
   stats_all.extend(stats_res["items"])
 
   while True:
-    stats_res = youtube.channels().list_next(stats_req, stats_res)
+    stats_res = youtube.videos().list_next(stats_req, stats_res)
     if stats_res == None:
       break
     stats_all.extend(stats_res["items"])
